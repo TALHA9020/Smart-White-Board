@@ -44,7 +44,6 @@ fun WhiteboardApp() {
     var isPencilMode by remember { mutableStateOf(true) }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        // وائٹ بورڈ (ڈرائنگ ایریا)
         Canvas(modifier = Modifier.fillMaxSize().pointerInput(Unit) {
             detectDragGestures(
                 onDragStart = { offset ->
@@ -66,7 +65,6 @@ fun WhiteboardApp() {
             }
         }
 
-        // سمارٹ کنٹرول پینل (Top Right)
         Box(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
             Column(
                 modifier = Modifier
@@ -77,38 +75,32 @@ fun WhiteboardApp() {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 if (!isExpanded) {
-                    // فولڈ موڈ: آپ کے بتائے ہوئے تین بٹن
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // پنسل / اریزر بٹن (سبز)
                         FloatingSmallButton(
-                            icon = if (isPencilMode) Icons.Default.Edit else Icons.Default.AutoFixNormal,
+                            icon = if (isPencilMode) Icons.Default.Edit else Icons.Default.Brush,
                             bgColor = Color(0xFF4CAF50),
                             onClick = { isPencilMode = !isPencilMode }
                         )
-                        // ڈیلیٹ آل بٹن (سرخ)
                         FloatingSmallButton(
                             icon = Icons.Default.Delete,
                             bgColor = Color(0xFFF44336),
                             onClick = { lines.clear() }
                         )
-                        // انفولڈ بٹن (نیلا)
                         FloatingSmallButton(
-                            icon = Icons.Default.UnfoldMore,
+                            icon = Icons.Default.ArrowDropDownCircle,
                             bgColor = Color(0xFF2196F3),
                             onClick = { isExpanded = true }
                         )
                     }
                 } else {
-                    // ان فولڈ موڈ: مکمل سیٹنگز
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Size", color = Color.White, modifier = Modifier.padding(end = 8.dp))
                         Slider(value = strokeWidth, onValueChange = { strokeWidth = it }, valueRange = 5f..80f, modifier = Modifier.width(120.dp))
                         IconButton(onClick = { isExpanded = false }) {
-                            Icon(Icons.Default.UnfoldLess, "Close", tint = Color.Cyan)
+                            Icon(Icons.Default.ArrowCircleUp, "Close", tint = Color.Cyan)
                         }
                     }
                     Divider(color = Color.Gray, modifier = Modifier.padding(vertical = 8.dp))
-                    // رنگ منتخب کرنے کے لیے
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         val colors = listOf(Color.Black, Color.Red, Color.Blue, Color.Green, Color.Yellow)
                         colors.forEach { color ->
