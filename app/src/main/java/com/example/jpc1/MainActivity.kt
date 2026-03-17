@@ -1,4 +1,4 @@
-package com.example.jpc1
+package com.smart.whiteboard
 
 import android.content.Context
 import android.content.Intent
@@ -58,7 +58,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 1001) {
@@ -73,11 +72,6 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainScreen(context: Context, onStartClick: () -> Unit) {
-    val prefs = context.getSharedPreferences("clock_prefs", Context.MODE_PRIVATE)
-    
-    var sizeScale by remember { mutableFloatStateOf(prefs.getFloat("size_scale", 1f)) }
-    var opacity by remember { mutableFloatStateOf(prefs.getFloat("opacity", 1f)) }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -86,49 +80,18 @@ fun MainScreen(context: Context, onStartClick: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Golden Floating Clock", 
+            text = "Smart White Board", 
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary
         )
         
         Spacer(modifier = Modifier.height(40.dp))
 
-        Text(text = "Size: ${(sizeScale * 100).toInt()}%")
-        Slider(
-            value = sizeScale,
-            onValueChange = { 
-                sizeScale = it
-                prefs.edit().putFloat("size_scale", it).apply()
-            },
-            valueRange = 0.5f..2.0f
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Text(text = "Opacity: ${(opacity * 100).toInt()}%")
-        Slider(
-            value = opacity,
-            onValueChange = { 
-                opacity = it
-                prefs.edit().putFloat("opacity", it).apply()
-            },
-            valueRange = 0.2f..1.0f
-        )
-
-        Spacer(modifier = Modifier.height(40.dp))
-
         Button(
             onClick = onStartClick,
             modifier = Modifier.fillMaxWidth().height(56.dp)
         ) {
-            Text(text = "Launch / Update Clock")
+            Text(text = "Launch Control Panel")
         }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Tip: Drag capsule to the very top of the screen to remove it.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.secondary
-        )
     }
 }
