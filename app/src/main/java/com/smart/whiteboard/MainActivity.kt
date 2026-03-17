@@ -1,106 +1,131 @@
 package com.smart.whiteboard
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+
+// لکیر کا ڈیٹا
+data class DrawingLine(
+    val path: Path,
+    val color: Color,
+    val strokeWidth: Float
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    MainScreen(
-                        context = this,
-                        onStartClick = { checkAndStartService() }
-                    )
-                }
-            }
-        }
-    }
-
-    private fun checkAndStartService() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (!Settings.canDrawOverlays(this)) {
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
-                )
-                startActivityForResult(intent, 1001)
-            } else {
-                startFloatingService()
-            }
-        } else {
-            startFloatingService()
-        }
-    }
-
-    private fun startFloatingService() {
-        // اب یہ سروس کو 'FloatingControlService' کے نام سے ڈھونڈے گا
-        val intent = Intent(this, FloatingControlService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 1001) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (Settings.canDrawOverlays(this)) {
-                    startFloatingService()
-                }
-            }
+            WhiteboardApp()
         }
     }
 }
 
 @Composable
-fun MainScreen(context: Context, onStartClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Smart White Board", 
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
-        
-        Spacer(modifier = Modifier.height(40.dp))
+fun WhiteboardApp() {
+    val lines = remember { mutableStateListOf<DrawingLine>() }
+    var currentColor by remember { mutableStateOf(Color.Black) }
+    var strokeWidth by remember { mutableFloatStateOf(8f) }
 
-        Button(
-            onClick = onStartClick,
-            modifier = Modifier.fillMaxWidth().height(56.dp)
-        ) {
-            Text(text = "Launch Control Panel")
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Tip: Permission is required to show the panel over other apps.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.secondary
+    Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
+        // اوپر والا کنٹرول بار
+        SmallTopAppBar(
+            title = { Text("Smart Whiteboard") },
+            actions = {
+                IconButton(onClick = { if (lines.isNotEmpty()) lines.removeAt(lines.size - 1) }) {
+                    Icon(Icons.Default.Undo, contentDescription = "Undo")
+                }
+                IconButton(onClick = { lines.clear() }) {
+                    Icon(Icons.Default.Delete, contentDescription = "Clear All", tint = Color.Red)
+                }
+            }
         )
+
+        // ڈرائنگ ایریا (سفید بورڈ)
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .background(Color.White)
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            val newPath = Path().apply { moveTo(offset.x, offset.y) }
+                            lines.add(DrawingLine(newPath, currentColor, strokeWidth))
+                        },
+                        onDrag = { change, _ ->
+                            change.consume()
+                            lines.lastOrNull()?.path?.lineTo(change.position.x, change.position.y)
+                            // ری ڈرا کرنے کے لیے لسٹ کو ری فریش کرنا
+                            val last = lines.removeAt(lines.size - 1)
+                            lines.add(last)
+                        }
+                    )
+                }
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                lines.forEach { line ->
+                    drawPath(
+                        path = line.path,
+                        color = line.color,
+                        style = Stroke(
+                            width = line.strokeWidth,
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round
+                        )
+                    )
+                }
+            }
+        }
+
+        // نیچے رنگوں اور سائز کا پینل
+        BottomToolBar(
+            onColorSelect = { currentColor = it },
+            onSizeChange = { strokeWidth = it },
+            currentWidth = strokeWidth
+        )
+    }
+}
+
+@Composable
+fun BottomToolBar(onColorSelect: (Color) -> Unit, onSizeChange: (Float) -> Unit, currentWidth: Float) {
+    Surface(tonalElevation = 8.dp) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(15.dp)) {
+                val colors = listOf(Color.Black, Color.Red, Color.Blue, Color.Green, Color.Magenta)
+                colors.forEach { color ->
+                    Button(
+                        onClick = { onColorSelect(color) },
+                        colors = ButtonDefaults.buttonColors(containerColor = color),
+                        modifier = Modifier.size(40.dp),
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        content = {}
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text("Brush Size")
+            Slider(
+                value = currentWidth,
+                onValueChange = onSizeChange,
+                valueRange = 2f..50f
+            )
+        }
     }
 }
