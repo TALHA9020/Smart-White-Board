@@ -24,13 +24,14 @@
             </intent-filter>
         </activity>
 
+        <!-- سروس کا نام یہاں بدل دیا گیا ہے -->
         <service
-            android:name=".FloatingClockService"
+            android:name=".FloatingControlService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_SERVICE_TYPE" 
-                      android:value="This app provides a floating control panel for the smart whiteboard to help users draw and erase easily." />
+                      android:value="This app provides a floating control panel for the smart whiteboard." />
         </service>
     </application>
 
