@@ -35,7 +35,8 @@ import androidx.core.app.NotificationCompat
 import androidx.lifecycle.*
 import androidx.savedstate.*
 
-class FloatingClockService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
+// کلاس کا نام یہاں درست کر دیا گیا ہے
+class FloatingControlService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
     private lateinit var windowManager: WindowManager
     private var floatingView: ComposeView? = null
@@ -92,9 +93,9 @@ class FloatingClockService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
         }
 
         floatingView = ComposeView(this).apply {
-            setViewTreeLifecycleOwner(this@FloatingClockService)
-            setViewTreeViewModelStoreOwner(this@FloatingClockService)
-            setViewTreeSavedStateRegistryOwner(this@FloatingClockService)
+            setViewTreeLifecycleOwner(this@FloatingControlService)
+            setViewTreeViewModelStoreOwner(this@FloatingControlService)
+            setViewTreeSavedStateRegistryOwner(this@FloatingControlService)
 
             setContent {
                 ControlPanelUI()
