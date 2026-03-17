@@ -3,15 +3,20 @@ package com.smart.whiteboard
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -21,19 +26,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 
-// لکیر کا ڈیٹا
-data class DrawingLine(
-    val path: Path,
-    val color: Color,
-    val strokeWidth: Float
-)
+data class DrawingLine(val path: Path, val color: Color, val strokeWidth: Float)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            WhiteboardApp()
-        }
+        setContent { WhiteboardApp() }
     }
 }
 
@@ -42,90 +40,99 @@ fun WhiteboardApp() {
     val lines = remember { mutableStateListOf<DrawingLine>() }
     var currentColor by remember { mutableStateOf(Color.Black) }
     var strokeWidth by remember { mutableFloatStateOf(8f) }
+    var isExpanded by remember { mutableStateOf(false) }
+    var isPencilMode by remember { mutableStateOf(true) }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        // اوپر والا کنٹرول بار
-        SmallTopAppBar(
-            title = { Text("Smart Whiteboard") },
-            actions = {
-                IconButton(onClick = { if (lines.isNotEmpty()) lines.removeAt(lines.size - 1) }) {
-                    Icon(Icons.Default.Undo, contentDescription = "Undo")
+    Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
+        // وائٹ بورڈ (ڈرائنگ ایریا)
+        Canvas(modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+            detectDragGestures(
+                onDragStart = { offset ->
+                    val drawColor = if (isPencilMode) currentColor else Color.White
+                    val newPath = Path().apply { moveTo(offset.x, offset.y) }
+                    lines.add(DrawingLine(newPath, drawColor, strokeWidth))
+                },
+                onDrag = { change, _ ->
+                    change.consume()
+                    lines.lastOrNull()?.path?.lineTo(change.position.x, change.position.y)
+                    val last = lines.removeAt(lines.size - 1)
+                    lines.add(last)
                 }
-                IconButton(onClick = { lines.clear() }) {
-                    Icon(Icons.Default.Delete, contentDescription = "Clear All", tint = Color.Red)
-                }
-            }
-        )
-
-        // ڈرائنگ ایریا (سفید بورڈ)
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .background(Color.White)
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            val newPath = Path().apply { moveTo(offset.x, offset.y) }
-                            lines.add(DrawingLine(newPath, currentColor, strokeWidth))
-                        },
-                        onDrag = { change, _ ->
-                            change.consume()
-                            lines.lastOrNull()?.path?.lineTo(change.position.x, change.position.y)
-                            // ری ڈرا کرنے کے لیے لسٹ کو ری فریش کرنا
-                            val last = lines.removeAt(lines.size - 1)
-                            lines.add(last)
-                        }
-                    )
-                }
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                lines.forEach { line ->
-                    drawPath(
-                        path = line.path,
-                        color = line.color,
-                        style = Stroke(
-                            width = line.strokeWidth,
-                            cap = StrokeCap.Round,
-                            join = StrokeJoin.Round
-                        )
-                    )
-                }
+            )
+        }) {
+            lines.forEach { line ->
+                drawPath(path = line.path, color = line.color,
+                    style = Stroke(width = line.strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round))
             }
         }
 
-        // نیچے رنگوں اور سائز کا پینل
-        BottomToolBar(
-            onColorSelect = { currentColor = it },
-            onSizeChange = { strokeWidth = it },
-            currentWidth = strokeWidth
-        )
+        // سمارٹ کنٹرول پینل (Top Right)
+        Box(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
+            Column(
+                modifier = Modifier
+                    .background(Color(0xFF1E1E1E), RoundedCornerShape(25.dp))
+                    .border(1.dp, Color.DarkGray, RoundedCornerShape(25.dp))
+                    .padding(8.dp)
+                    .animateContentSize(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (!isExpanded) {
+                    // فولڈ موڈ: آپ کے بتائے ہوئے تین بٹن
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // پنسل / اریزر بٹن (سبز)
+                        FloatingSmallButton(
+                            icon = if (isPencilMode) Icons.Default.Edit else Icons.Default.AutoFixNormal,
+                            bgColor = Color(0xFF4CAF50),
+                            onClick = { isPencilMode = !isPencilMode }
+                        )
+                        // ڈیلیٹ آل بٹن (سرخ)
+                        FloatingSmallButton(
+                            icon = Icons.Default.Delete,
+                            bgColor = Color(0xFFF44336),
+                            onClick = { lines.clear() }
+                        )
+                        // انفولڈ بٹن (نیلا)
+                        FloatingSmallButton(
+                            icon = Icons.Default.UnfoldMore,
+                            bgColor = Color(0xFF2196F3),
+                            onClick = { isExpanded = true }
+                        )
+                    }
+                } else {
+                    // ان فولڈ موڈ: مکمل سیٹنگز
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Size", color = Color.White, modifier = Modifier.padding(end = 8.dp))
+                        Slider(value = strokeWidth, onValueChange = { strokeWidth = it }, valueRange = 5f..80f, modifier = Modifier.width(120.dp))
+                        IconButton(onClick = { isExpanded = false }) {
+                            Icon(Icons.Default.UnfoldLess, "Close", tint = Color.Cyan)
+                        }
+                    }
+                    Divider(color = Color.Gray, modifier = Modifier.padding(vertical = 8.dp))
+                    // رنگ منتخب کرنے کے لیے
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        val colors = listOf(Color.Black, Color.Red, Color.Blue, Color.Green, Color.Yellow)
+                        colors.forEach { color ->
+                            Box(modifier = Modifier.size(32.dp).background(color, CircleShape)
+                                .border(if (currentColor == color) 2.dp else 0.dp, Color.White, CircleShape)
+                                .clickable { currentColor = color; isPencilMode = true }
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-fun BottomToolBar(onColorSelect: (Color) -> Unit, onSizeChange: (Float) -> Unit, currentWidth: Float) {
-    Surface(tonalElevation = 8.dp) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(15.dp)) {
-                val colors = listOf(Color.Black, Color.Red, Color.Blue, Color.Green, Color.Magenta)
-                colors.forEach { color ->
-                    Button(
-                        onClick = { onColorSelect(color) },
-                        colors = ButtonDefaults.buttonColors(containerColor = color),
-                        modifier = Modifier.size(40.dp),
-                        shape = androidx.compose.foundation.shape.CircleShape,
-                        content = {}
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-            Text("Brush Size")
-            Slider(
-                value = currentWidth,
-                onValueChange = onSizeChange,
-                valueRange = 2f..50f
-            )
-        }
+fun FloatingSmallButton(icon: androidx.compose.ui.graphics.vector.ImageVector, bgColor: Color, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(45.dp)
+            .background(bgColor, CircleShape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
     }
 }
