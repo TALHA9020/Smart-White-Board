@@ -1,4 +1,4 @@
-package com.example.jpc1
+package com.smart.whiteboard
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -19,23 +19,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.*
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
-import java.text.SimpleDateFormat
-import java.util.*
 
 class FloatingClockService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
@@ -62,36 +54,32 @@ class FloatingClockService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        showFloatingClock()
+        showFloatingUI()
         return START_STICKY
     }
 
     private fun startMyForeground() {
-        val channelId = "floating_clock_channel"
+        val channelId = "whiteboard_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Golden Clock", NotificationManager.IMPORTANCE_LOW)
+            val channel = NotificationChannel(channelId, "Smart White Board", NotificationManager.IMPORTANCE_LOW)
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
         }
         
         val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Golden Clock Active")
-            .setContentText("گھڑی سکرین پر موجود ہے")
-            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setContentTitle("Smart White Board Active")
+            .setContentText("کنٹرول پینل سکرین پر موجود ہے")
+            .setSmallIcon(android.R.drawable.ic_menu_edit)
             .setOngoing(true)
             .build()
 
         startForeground(1, notification)
     }
 
-    private fun showFloatingClock() {
+    private fun showFloatingUI() {
         if (floatingView != null) {
             try { windowManager.removeView(floatingView) } catch (e: Exception) {}
         }
-
-        val prefs = getSharedPreferences("clock_prefs", Context.MODE_PRIVATE)
-        val sizeScale = prefs.getFloat("size_scale", 1f)
-        val currentOpacity = prefs.getFloat("opacity", 1f)
 
         params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -111,30 +99,14 @@ class FloatingClockService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
             setViewTreeSavedStateRegistryOwner(this@FloatingClockService)
 
             setContent {
-                var currentTime by remember { mutableStateOf(getCurrentTime()) }
-                LaunchedEffect(Unit) {
-                    while(true) {
-                        currentTime = getCurrentTime()
-                        kotlinx.coroutines.delay(1000)
-                    }
-                }
                 Box(
                     modifier = Modifier
-                        .scale(sizeScale)
-                        .alpha(currentOpacity)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color(0xFFFFD700), Color(0xFFB8860B))
-                            ),
-                            shape = RoundedCornerShape(50.dp)
-                        )
-                        .padding(horizontal = 20.dp, vertical = 8.dp)
+                        .background(Color.DarkGray, shape = RoundedCornerShape(12.dp))
+                        .padding(16.dp)
                 ) {
                     Text(
-                        text = currentTime,
-                        color = Color.Black,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
+                        text = "White Board Panel",
+                        color = Color.White
                     )
                 }
             }
@@ -161,20 +133,12 @@ class FloatingClockService : Service(), LifecycleOwner, ViewModelStoreOwner, Sav
                         windowManager.updateViewLayout(floatingView, params)
                         return true
                     }
-                    MotionEvent.ACTION_UP -> {
-                        if (params.y < 50) stopSelf()
-                        return true
-                    }
                 }
                 return false
             }
         })
 
         windowManager.addView(floatingView, params)
-    }
-
-    private fun getCurrentTime(): String {
-        return SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
