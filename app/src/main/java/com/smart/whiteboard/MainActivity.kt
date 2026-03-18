@@ -1,6 +1,11 @@
 package com.smart.whiteboard
 
+import android.os.Build
 import android.os.Bundle
+import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsController
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.animateContentSize
@@ -41,10 +46,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // --- الٹرا فل سکرین سیٹنگ (اسٹیٹس بار اور نیویگیشن بار غائب) ---
+        // --- کالی پٹی کو جڑ سے ختم کرنے کے لئے ---
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        
         val controller = WindowInsetsControllerCompat(window, window.decorView)
-        controller.hide(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+        controller.hide(WindowInsetsCompat.Type.systemBars())
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         
         setContent { WhiteboardApp() }
@@ -63,51 +70,56 @@ fun WhiteboardApp() {
     var confirmRequired by remember { mutableStateOf(true) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    // پینل کی پوزیشن، سائز اور روٹیشن
-    var panelOffset by remember { mutableStateOf(Offset(100f, 200f)) }
+    var panelOffset by remember { mutableStateOf(Offset(100f, 300f)) }
     var scale by remember { mutableFloatStateOf(1f) }
     var rotation by remember { mutableFloatStateOf(0f) }
 
-    // گلوبل ٹرانسفارم (سکرین پر کہیں بھی پنچ کریں)
-    val state = rememberTransformableState { zoomChange, _, rotationChange ->
-        scale = (scale * zoomChange).coerceIn(0.5f, 2.5f)
+    // ٹو-فنگر کنٹرول (زوم، روٹیٹ، اور پینل ڈریگ)
+    val state = rememberTransformableState { zoomChange, panChange, rotationChange ->
+        scale = (scale * zoomChange).coerceIn(0.4f, 3f)
         rotation += rotationChange
+        panelOffset += panChange // پینل انگلیوں کی سپیڈ کے ساتھ چلے گا
     }
 
+    // پینل چاہے الٹا ہو، ڈریگ ہمیشہ سیدھا رہے گا
     Box(modifier = Modifier
         .fillMaxSize()
         .background(Color.White)
-        .transformable(state = state) 
+        .transformable(state = state)
     ) {
-        // --- کینوس (پوری سکرین پر ڈرائنگ) ---
-        Canvas(modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-            detectDragGestures(
-                onDragStart = { offset ->
-                    val drawColor = if (isPencilMode) currentColor else Color.White
-                    val finalWidth = if (isPencilMode) strokeWidth else strokeWidth * 4f
-                    val newPath = Path().apply { moveTo(offset.x, offset.y) }
-                    lines.add(DrawingLine(newPath, drawColor, finalWidth))
-                    undoneLines.clear()
-                },
-                onDrag = { change, _ ->
-                    change.consume()
-                    lines.lastOrNull()?.path?.lineTo(change.position.x, change.position.y)
-                    val last = lines.removeAt(lines.size - 1)
-                    lines.add(last)
-                }
-            )
-        }) {
+        // --- کینوس ---
+        Canvas(modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(isPencilMode, currentColor, strokeWidth) {
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        val drawColor = if (isPencilMode) currentColor else Color.White
+                        val finalWidth = if (isPencilMode) strokeWidth else strokeWidth * 4f
+                        val newPath = Path().apply { moveTo(offset.x, offset.y) }
+                        lines.add(DrawingLine(newPath, drawColor, finalWidth))
+                        undoneLines.clear()
+                    },
+                    onDrag = { change, _ ->
+                        if (change.pressed) {
+                            change.consume()
+                            lines.lastOrNull()?.path?.lineTo(change.position.x, change.position.y)
+                            val last = lines.removeAt(lines.size - 1)
+                            lines.add(last)
+                        }
+                    }
+                )
+            }
+        ) {
             lines.forEach { line ->
                 drawPath(path = line.path, color = line.color,
                     style = Stroke(width = line.strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round))
             }
         }
 
-        // --- اسمارٹ ڈریگیبل روٹیٹیبل پینل ---
+        // --- اسمارٹ ڈریگیبل پینل ---
         Box(
             modifier = Modifier
                 .offset { IntOffset(panelOffset.x.roundToInt(), panelOffset.y.roundToInt()) }
-                // اہم: گرافکس لیئر روٹیشن کے لیے، لیکن یہ ڈریگ کی ڈائریکشن کو متاثر نہیں کرے گی
                 .graphicsLayer(
                     scaleX = scale,
                     scaleY = scale,
@@ -116,7 +128,7 @@ fun WhiteboardApp() {
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
-                        // پینل چاہے کسی بھی رخ پر گھما ہو، یہ انگلی کے ساتھ سیدھا چلے گا
+                        // یہاں ڈریگنگ ہمیشہ "گلوبل" رہے گی، روٹیشن کو اگنور کرے گی
                         panelOffset += dragAmount
                     }
                 }
@@ -138,7 +150,6 @@ fun WhiteboardApp() {
             )
         }
 
-        // ڈیلیٹ ڈائیلاگ
         if (showDeleteDialog) {
             AlertDialog(
                 onDismissRequest = { showDeleteDialog = false },
@@ -176,7 +187,6 @@ fun ControlPanelContent(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (isExpanded) {
-            // لائن 1: ٹولز اور کلرز
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 IconButton(onClick = { onModeChange(true) }, 
                     modifier = Modifier.background(if(isPencilMode) Color.Green else Color.Transparent, CircleShape)) {
@@ -197,7 +207,6 @@ fun ControlPanelContent(
             Spacer(Modifier.height(10.dp))
             Divider(color = Color.DarkGray)
             Spacer(Modifier.height(10.dp))
-            // لائن 2: دیگر کنٹرولز
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 IconButton(onClick = onClear) { Icon(Icons.Default.Delete, null, tint = Color.Red) }
                 Checkbox(checked = confirmRequired, onCheckedChange = onConfirmToggle, colors = CheckboxDefaults.colors(uncheckedColor = Color.Gray))
@@ -205,10 +214,9 @@ fun ControlPanelContent(
                 Box(modifier = Modifier.size((strokeWidth/6).coerceIn(3f, 15f).dp).background(if(isPencilMode) currentColor else Color.LightGray, CircleShape))
                 IconButton(onClick = onUndo) { Icon(Icons.Default.Undo, null, tint = Color.White) }
                 IconButton(onClick = onRedo) { Icon(Icons.Default.Redo, null, tint = Color.White) }
-                IconButton(onClick = onFoldToggle) { Icon(Icons.Default.ExpandLess, null, tint = Color.Cyan) }
+                IconButton(onClick = { onFoldToggle() }) { Icon(Icons.Default.ExpandLess, null, tint = Color.Cyan) }
             }
         } else {
-            // فولڈڈ موڈ: تین کیپسولز
             Row(horizontalArrangement = Arrangement.spacedBy(15.dp)) {
                 Box(Modifier.size(45.dp, 22.dp).background(if(isPencilMode) Color.Green else Color.LightGray, CircleShape).clickable { onModeChange(!isPencilMode) })
                 Box(Modifier.size(45.dp, 22.dp).background(Color.Red, CircleShape).clickable { onClear() })
