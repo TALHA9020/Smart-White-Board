@@ -10,8 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,17 +37,25 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import kotlin.math.roundToInt
 
+// ڈرائنگ ڈیٹا کلاس
 data class DrawingLine(val path: Path, val color: Color, val strokeWidth: Float)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // فل سکرین سیٹنگز
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         val controller = WindowInsetsControllerCompat(window, window.decorView)
         controller.hide(WindowInsetsCompat.Type.systemBars())
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        setContent { WhiteboardApp() }
+        
+        setContent {
+            Surface(modifier = Modifier.fillMaxSize(), color = Color.White) {
+                WhiteboardApp()
+            }
+        }
     }
 }
 
@@ -64,55 +71,44 @@ fun WhiteboardApp() {
     var confirmRequired by remember { mutableStateOf(true) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
+    // پینل کی سٹیٹس (States)
     var panelOffset by remember { mutableStateOf(Offset(150f, 450f)) }
     var scale by remember { mutableFloatStateOf(1f) }
     var rotation by remember { mutableFloatStateOf(0f) }
     
     var screenSize by remember { mutableStateOf(IntSize.Zero) }
-    var panelSize by remember { mutableStateOf(IntSize.Zero) }
 
-    val limitOffset: (Offset) -> Offset = { nextOffset ->
-        if (screenSize == IntSize.Zero || panelSize == IntSize.Zero) nextOffset
-        else {
-            val pW = (panelSize.width * scale)
-            val pH = (panelSize.height * scale)
-            val minX = -(pW / 2f)
-            val maxX = screenSize.width - (pW / 2f)
-            val minY = -(pH / 2f)
-            val maxY = screenSize.height - (pH / 2f)
-            Offset(x = nextOffset.x.coerceIn(minX, maxX), y = nextOffset.y.coerceIn(minY, maxY))
-        }
-    }
-
-    val transformState = rememberTransformableState { zoomChange, panChange, rotationChange ->
-        scale = (scale * zoomChange).coerceIn(0.4f, 3f)
-        rotation += rotationChange
-        panelOffset = limitOffset(panelOffset + panChange)
-    }
-
+    // مین کنٹینر (سکرین)
     Box(modifier = Modifier
         .fillMaxSize()
         .background(Color.White)
         .onSizeChanged { screenSize = it }
-        .transformable(state = transformState)
+        // 1. ٹو-فنگر کنٹرول: سکرین پر کہیں بھی پنچ، روٹیٹ یا ڈریگ کریں
+        .pointerInput(Unit) {
+            detectTransformGestures { _, pan, zoom, rotationChange ->
+                scale = (scale * zoom).coerceIn(0.5f, 4f)
+                rotation += rotationChange
+                // ٹو-فنگر ڈریگ سکرین کی سمت کو فالو کرے گا
+                panelOffset += pan
+            }
+        }
     ) {
-        // فکس کیا ہوا کینوس: اب یہ ایرر نہیں دے گا
+        // وائٹ بورڈ کینوس (ڈرائنگ کے لیے)
         Canvas(modifier = Modifier
             .fillMaxSize()
             .pointerInput(isPencilMode, currentColor, strokeWidth) {
                 detectDragGestures(
                     onDragStart = { offset ->
-                        // ہم صرف سنگل فنگر ڈرائنگ چاہ رہے ہیں
                         val drawColor = if (isPencilMode) currentColor else Color.White
                         val finalWidth = if (isPencilMode) strokeWidth else strokeWidth * 4f
                         lines.add(DrawingLine(Path().apply { moveTo(offset.x, offset.y) }, drawColor, finalWidth))
                         undoneLines.clear()
                     },
                     onDrag = { change, _ ->
-                        // اگر ٹو-فنگر استعمال ہو رہی ہو تو یہ خود بخود ڈرائنگ روک دے گا
                         if (change.pressed) {
                             change.consume()
                             lines.lastOrNull()?.path?.lineTo(change.position.x, change.position.y)
+                            // لسٹ کو اپ ڈیٹ کرنے کے لیے ٹرک
                             val last = lines.removeAt(lines.size - 1)
                             lines.add(last)
                         }
@@ -121,22 +117,31 @@ fun WhiteboardApp() {
             }
         ) {
             lines.forEach { line ->
-                drawPath(path = line.path, color = line.color,
-                    style = Stroke(width = line.strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                drawPath(
+                    path = line.path, 
+                    color = line.color,
+                    style = Stroke(width = line.strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                )
             }
         }
 
+        // 2. کنٹرول پینل
         Box(
             modifier = Modifier
                 .offset { IntOffset(panelOffset.x.roundToInt(), panelOffset.y.roundToInt()) }
-                .onSizeChanged { panelSize = it }
-                .graphicsLayer(scaleX = scale, scaleY = scale, rotationZ = rotation)
+                // پینل کے اوپر سنگل فنگر ڈریگ
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
-                        panelOffset = limitOffset(panelOffset + dragAmount)
+                        // یہ روٹیشن کو اگنور کر کے انگلی کی سپیڈ کو فالو کرے گا
+                        panelOffset += dragAmount
                     }
                 }
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    rotationZ = rotation
+                )
         ) {
             ControlPanelContent(
                 isExpanded = isExpanded,
@@ -155,13 +160,22 @@ fun WhiteboardApp() {
             )
         }
 
+        // ڈیلیٹ کنفرمیشن ڈائیلاگ
         if (showDeleteDialog) {
             AlertDialog(
                 onDismissRequest = { showDeleteDialog = false },
                 title = { Text("تصدیق") },
                 text = { Text("کیا آپ سارا بورڈ صاف کرنا چاہتے ہیں؟") },
-                confirmButton = { TextButton(onClick = { lines.clear(); showDeleteDialog = false }) { Text("ہاں", color = Color.Red) } },
-                dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("نہیں") } }
+                confirmButton = { 
+                    TextButton(onClick = { lines.clear(); showDeleteDialog = false }) { 
+                        Text("ہاں", color = Color.Red) 
+                    } 
+                },
+                dismissButton = { 
+                    TextButton(onClick = { showDeleteDialog = false }) { 
+                        Text("نہیں") 
+                    } 
+                }
             )
         }
     }
@@ -203,7 +217,9 @@ fun ControlPanelContent(
                 }
                 val colors = listOf(Color.Black, Color.Red, Color.Blue, Color.Green, Color.Yellow)
                 colors.forEach { color ->
-                    Box(modifier = Modifier.size(24.dp).background(color, CircleShape)
+                    Box(modifier = Modifier
+                        .size(24.dp)
+                        .background(color, CircleShape)
                         .border(if (currentColor == color) 2.dp else 0.dp, Color.White, CircleShape)
                         .clickable { onColorChange(color) }
                     )
