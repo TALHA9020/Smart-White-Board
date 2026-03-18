@@ -43,15 +43,11 @@ data class DrawingLine(val path: Path, val color: Color, val strokeWidth: Float)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // مکمل فل سکرین (بغیر کسی کالی پٹی کے)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-        
         val controller = WindowInsetsControllerCompat(window, window.decorView)
         controller.hide(WindowInsetsCompat.Type.systemBars())
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        
         setContent { WhiteboardApp() }
     }
 }
@@ -68,7 +64,6 @@ fun WhiteboardApp() {
     var confirmRequired by remember { mutableStateOf(true) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    // پینل کی سٹیٹ
     var panelOffset by remember { mutableStateOf(Offset(150f, 450f)) }
     var scale by remember { mutableFloatStateOf(1f) }
     var rotation by remember { mutableFloatStateOf(0f) }
@@ -76,28 +71,20 @@ fun WhiteboardApp() {
     var screenSize by remember { mutableStateOf(IntSize.Zero) }
     var panelSize by remember { mutableStateOf(IntSize.Zero) }
 
-    // باؤنڈری لاک: پینل کو آدھا باہر جانے کی اجازت
     val limitOffset: (Offset) -> Offset = { nextOffset ->
         if (screenSize == IntSize.Zero || panelSize == IntSize.Zero) nextOffset
         else {
             val pW = (panelSize.width * scale)
             val pH = (panelSize.height * scale)
-            
-            // صرف آدھا پینل باہر جا سکے (باقی اندر رہے)
             val minX = -(pW / 2f)
             val maxX = screenSize.width - (pW / 2f)
             val minY = -(pH / 2f)
             val maxY = screenSize.height - (pH / 2f)
-            
-            Offset(
-                x = nextOffset.x.coerceIn(minX, maxX),
-                y = nextOffset.y.coerceIn(minY, maxY)
-            )
+            Offset(x = nextOffset.x.coerceIn(minX, maxX), y = nextOffset.y.coerceIn(minY, maxY))
         }
     }
 
-    // ٹو-فنگر کنٹرول (زوم، روٹیشن، اور 1:1 سپیڈ ڈریگ)
-    val state = rememberTransformableState { zoomChange, panChange, rotationChange ->
+    val transformState = rememberTransformableState { zoomChange, panChange, rotationChange ->
         scale = (scale * zoomChange).coerceIn(0.4f, 3f)
         rotation += rotationChange
         panelOffset = limitOffset(panelOffset + panChange)
@@ -107,36 +94,30 @@ fun WhiteboardApp() {
         .fillMaxSize()
         .background(Color.White)
         .onSizeChanged { screenSize = it }
-        .transformable(state = state)
+        .transformable(state = transformState)
     ) {
-        // --- ڈرائنگ ایریا (ٹو-فنگر لاک کے ساتھ) ---
+        // فکس کیا ہوا کینوس: اب یہ ایرر نہیں دے گا
         Canvas(modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        // اگر ایک سے زیادہ انگلیاں ہیں تو ڈرائنگ مکمل بند
-                        val isMultiTouch = event.changes.size > 1
-                        
-                        if (!isMultiTouch) {
-                            detectDragGestures(
-                                onDragStart = { offset ->
-                                    val drawColor = if (isPencilMode) currentColor else Color.White
-                                    val finalWidth = if (isPencilMode) strokeWidth else strokeWidth * 4f
-                                    lines.add(DrawingLine(Path().apply { moveTo(offset.x, offset.y) }, drawColor, finalWidth))
-                                    undoneLines.clear()
-                                },
-                                onDrag = { change, _ ->
-                                    change.consume()
-                                    lines.lastOrNull()?.path?.lineTo(change.position.x, change.position.y)
-                                    val last = lines.removeAt(lines.size - 1)
-                                    lines.add(last)
-                                }
-                            )
+            .pointerInput(isPencilMode, currentColor, strokeWidth) {
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        // ہم صرف سنگل فنگر ڈرائنگ چاہ رہے ہیں
+                        val drawColor = if (isPencilMode) currentColor else Color.White
+                        val finalWidth = if (isPencilMode) strokeWidth else strokeWidth * 4f
+                        lines.add(DrawingLine(Path().apply { moveTo(offset.x, offset.y) }, drawColor, finalWidth))
+                        undoneLines.clear()
+                    },
+                    onDrag = { change, _ ->
+                        // اگر ٹو-فنگر استعمال ہو رہی ہو تو یہ خود بخود ڈرائنگ روک دے گا
+                        if (change.pressed) {
+                            change.consume()
+                            lines.lastOrNull()?.path?.lineTo(change.position.x, change.position.y)
+                            val last = lines.removeAt(lines.size - 1)
+                            lines.add(last)
                         }
                     }
-                }
+                )
             }
         ) {
             lines.forEach { line ->
@@ -145,20 +126,14 @@ fun WhiteboardApp() {
             }
         }
 
-        // --- اسمارٹ پینل (1:1 سپیڈ اور باؤنڈری لاک) ---
         Box(
             modifier = Modifier
                 .offset { IntOffset(panelOffset.x.roundToInt(), panelOffset.y.roundToInt()) }
                 .onSizeChanged { panelSize = it }
-                .graphicsLayer(
-                    scaleX = scale,
-                    scaleY = scale,
-                    rotationZ = rotation
-                )
+                .graphicsLayer(scaleX = scale, scaleY = scale, rotationZ = rotation)
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
-                        // سنگل فنگر ڈریگ - روٹیشن سے آزاد
                         panelOffset = limitOffset(panelOffset + dragAmount)
                     }
                 }
@@ -180,7 +155,6 @@ fun WhiteboardApp() {
             )
         }
 
-        // ڈیلیٹ کنفرمیشن
         if (showDeleteDialog) {
             AlertDialog(
                 onDismissRequest = { showDeleteDialog = false },
