@@ -37,20 +37,16 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import kotlin.math.roundToInt
 
-// ڈرائنگ ڈیٹا کلاس
 data class DrawingLine(val path: Path, val color: Color, val strokeWidth: Float)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // فل سکرین سیٹنگز
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         val controller = WindowInsetsControllerCompat(window, window.decorView)
         controller.hide(WindowInsetsCompat.Type.systemBars())
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        
         setContent {
             Surface(modifier = Modifier.fillMaxSize(), color = Color.White) {
                 WhiteboardApp()
@@ -71,36 +67,32 @@ fun WhiteboardApp() {
     var confirmRequired by remember { mutableStateOf(true) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    // پینل کی سٹیٹس (States)
     var panelOffset by remember { mutableStateOf(Offset(150f, 450f)) }
     var scale by remember { mutableFloatStateOf(1f) }
     var rotation by remember { mutableFloatStateOf(0f) }
     
     var screenSize by remember { mutableStateOf(IntSize.Zero) }
 
-    // مین کنٹینر (سکرین)
     Box(modifier = Modifier
         .fillMaxSize()
         .background(Color.White)
         .onSizeChanged { screenSize = it }
-        // 1. ٹو-فنگر کنٹرول: سکرین پر کہیں بھی پنچ، روٹیٹ یا ڈریگ کریں
         .pointerInput(Unit) {
             detectTransformGestures { _, pan, zoom, rotationChange ->
                 scale = (scale * zoom).coerceIn(0.5f, 4f)
                 rotation += rotationChange
-                // ٹو-فنگر ڈریگ سکرین کی سمت کو فالو کرے گا
                 panelOffset += pan
             }
         }
     ) {
-        // وائٹ بورڈ کینوس (ڈرائنگ کے لیے)
         Canvas(modifier = Modifier
             .fillMaxSize()
             .pointerInput(isPencilMode, currentColor, strokeWidth) {
                 detectDragGestures(
                     onDragStart = { offset ->
                         val drawColor = if (isPencilMode) currentColor else Color.White
-                        val finalWidth = if (isPencilMode) strokeWidth else strokeWidth * 4f
+                        // یہاں اریزر کا سائز پنسل کے سائز سے 5 گنا کر دیا گیا ہے
+                        val finalWidth = if (isPencilMode) strokeWidth else strokeWidth * 5f
                         lines.add(DrawingLine(Path().apply { moveTo(offset.x, offset.y) }, drawColor, finalWidth))
                         undoneLines.clear()
                     },
@@ -108,7 +100,6 @@ fun WhiteboardApp() {
                         if (change.pressed) {
                             change.consume()
                             lines.lastOrNull()?.path?.lineTo(change.position.x, change.position.y)
-                            // لسٹ کو اپ ڈیٹ کرنے کے لیے ٹرک
                             val last = lines.removeAt(lines.size - 1)
                             lines.add(last)
                         }
@@ -117,31 +108,21 @@ fun WhiteboardApp() {
             }
         ) {
             lines.forEach { line ->
-                drawPath(
-                    path = line.path, 
-                    color = line.color,
-                    style = Stroke(width = line.strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
-                )
+                drawPath(path = line.path, color = line.color,
+                    style = Stroke(width = line.strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round))
             }
         }
 
-        // 2. کنٹرول پینل
         Box(
             modifier = Modifier
                 .offset { IntOffset(panelOffset.x.roundToInt(), panelOffset.y.roundToInt()) }
-                // پینل کے اوپر سنگل فنگر ڈریگ
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
-                        // یہ روٹیشن کو اگنور کر کے انگلی کی سپیڈ کو فالو کرے گا
                         panelOffset += dragAmount
                     }
                 }
-                .graphicsLayer(
-                    scaleX = scale,
-                    scaleY = scale,
-                    rotationZ = rotation
-                )
+                .graphicsLayer(scaleX = scale, scaleY = scale, rotationZ = rotation)
         ) {
             ControlPanelContent(
                 isExpanded = isExpanded,
@@ -160,22 +141,13 @@ fun WhiteboardApp() {
             )
         }
 
-        // ڈیلیٹ کنفرمیشن ڈائیلاگ
         if (showDeleteDialog) {
             AlertDialog(
                 onDismissRequest = { showDeleteDialog = false },
                 title = { Text("تصدیق") },
                 text = { Text("کیا آپ سارا بورڈ صاف کرنا چاہتے ہیں؟") },
-                confirmButton = { 
-                    TextButton(onClick = { lines.clear(); showDeleteDialog = false }) { 
-                        Text("ہاں", color = Color.Red) 
-                    } 
-                },
-                dismissButton = { 
-                    TextButton(onClick = { showDeleteDialog = false }) { 
-                        Text("نہیں") 
-                    } 
-                }
+                confirmButton = { TextButton(onClick = { lines.clear(); showDeleteDialog = false }) { Text("ہاں", color = Color.Red) } },
+                dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("نہیں") } }
             )
         }
     }
@@ -217,9 +189,7 @@ fun ControlPanelContent(
                 }
                 val colors = listOf(Color.Black, Color.Red, Color.Blue, Color.Green, Color.Yellow)
                 colors.forEach { color ->
-                    Box(modifier = Modifier
-                        .size(24.dp)
-                        .background(color, CircleShape)
+                    Box(modifier = Modifier.size(24.dp).background(color, CircleShape)
                         .border(if (currentColor == color) 2.dp else 0.dp, Color.White, CircleShape)
                         .clickable { onColorChange(color) }
                     )
@@ -232,7 +202,8 @@ fun ControlPanelContent(
                 IconButton(onClick = onClear) { Icon(Icons.Default.Delete, null, tint = Color.Red) }
                 Checkbox(checked = confirmRequired, onCheckedChange = onConfirmToggle, colors = CheckboxDefaults.colors(uncheckedColor = Color.Gray))
                 Slider(value = strokeWidth, onValueChange = onWidthChange, valueRange = 4f..120f, modifier = Modifier.width(70.dp))
-                Box(modifier = Modifier.size((strokeWidth/6).coerceIn(3f, 15f).dp).background(if(isPencilMode) currentColor else Color.LightGray, CircleShape))
+                // یہاں بھی پریویو میں اریزر کا سائز 5 گنا بڑا نظر آئے گا
+                Box(modifier = Modifier.size(((if(isPencilMode) strokeWidth else strokeWidth * 5f)/6).coerceIn(3f, 25f).dp).background(if(isPencilMode) currentColor else Color.LightGray, CircleShape))
                 IconButton(onClick = onUndo) { Icon(Icons.Default.Undo, null, tint = Color.White) }
                 IconButton(onClick = onRedo) { Icon(Icons.Default.Redo, null, tint = Color.White) }
                 IconButton(onClick = { onFoldToggle() }) { Icon(Icons.Default.ExpandLess, null, tint = Color.Cyan) }
