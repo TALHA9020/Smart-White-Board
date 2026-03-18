@@ -16,7 +16,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,6 +37,7 @@ data class DrawingLine(val path: Path, val color: Color, val strokeWidth: Float)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // پٹی کو ہٹانے کے لیے ونڈو کو فل سکرین پر سیٹ کرنا
         setContent { WhiteboardApp() }
     }
 }
@@ -54,21 +54,20 @@ fun WhiteboardApp() {
     var confirmRequired by remember { mutableStateOf(true) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    // Control Panel Floating State
-    var panelOffset by remember { mutableStateOf(Offset(50f, 50f)) }
+    // Control Panel Position
+    var panelOffset by remember { mutableStateOf(Offset(100f, 100f)) }
     var scale by remember { mutableStateOf(1f) }
     val transformState = rememberTransformableState { zoomChange, _, _ ->
-        scale = (scale * zoomChange).coerceIn(0.7f, 1.5f)
+        scale = (scale * zoomChange).coerceIn(0.5f, 2f)
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        // --- DRAWING CANVAS ---
+        // Drawing Canvas - اب یہ پوری سکرین پر پھیلا ہوا ہے
         Canvas(modifier = Modifier.fillMaxSize().pointerInput(Unit) {
             detectDragGestures(
                 onDragStart = { offset ->
                     val drawColor = if (isPencilMode) currentColor else Color.White
-                    // اریزر کا سائز پنسل سے بڑا
-                    val finalWidth = if (isPencilMode) strokeWidth else strokeWidth * 3f
+                    val finalWidth = if (isPencilMode) strokeWidth else strokeWidth * 4f
                     val newPath = Path().apply { moveTo(offset.x, offset.y) }
                     lines.add(DrawingLine(newPath, drawColor, finalWidth))
                     undoneLines.clear()
@@ -82,15 +81,12 @@ fun WhiteboardApp() {
             )
         }) {
             lines.forEach { line ->
-                drawPath(
-                    path = line.path, 
-                    color = line.color,
-                    style = Stroke(width = line.strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
-                )
+                drawPath(path = line.path, color = line.color,
+                    style = Stroke(width = line.strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round))
             }
         }
 
-        // --- DRAGGABLE CONTROL PANEL ---
+        // Draggable Control Panel
         Box(
             modifier = Modifier
                 .offset { IntOffset(panelOffset.x.roundToInt(), panelOffset.y.roundToInt()) }
@@ -103,127 +99,89 @@ fun WhiteboardApp() {
                     }
                 }
         ) {
-            ControlPanelContent(
-                isExpanded = isExpanded,
-                isPencilMode = isPencilMode,
-                currentColor = currentColor,
-                strokeWidth = strokeWidth,
-                confirmRequired = confirmRequired,
-                onModeChange = { isPencilMode = it },
-                onColorChange = { currentColor = it; isPencilMode = true },
-                onWidthChange = { strokeWidth = it },
-                onUndo = { if (lines.isNotEmpty()) undoneLines.add(lines.removeAt(lines.size - 1)) },
-                onRedo = { if (undoneLines.isNotEmpty()) lines.add(undoneLines.removeAt(undoneLines.size - 1)) },
-                onClear = { if (confirmRequired) showDeleteDialog = true else lines.clear() },
-                onFoldToggle = { isExpanded = !isExpanded },
-                onConfirmToggle = { confirmRequired = it }
-            )
+            Column(
+                modifier = Modifier
+                    .background(Color(0xFF212121), RoundedCornerShape(28.dp))
+                    .border(1.dp, Color.Gray.copy(0.4f), RoundedCornerShape(28.dp))
+                    .padding(12.dp)
+                    .animateContentSize(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (isExpanded) {
+                    // Line 1: Tools & Colors
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        IconButton(onClick = { isPencilMode = true }, 
+                            modifier = Modifier.background(if(isPencilMode) Color.Green else Color.Transparent, CircleShape)) {
+                            Icon(Icons.Default.Edit, "Pencil", tint = if(isPencilMode) Color.Black else Color.White)
+                        }
+                        IconButton(onClick = { isPencilMode = false },
+                            modifier = Modifier.background(if(!isPencilMode) Color.White else Color.Transparent, CircleShape)) {
+                            Icon(Icons.Default.AutoFixNormal, "Eraser", tint = Color.Black)
+                        }
+                        
+                        val colors = listOf(Color.Black, Color.Red, Color.Blue, Color.Green, Color.Yellow)
+                        colors.forEach { color ->
+                            Box(modifier = Modifier.size(26.dp).background(color, CircleShape)
+                                .border(if (currentColor == color) 2.dp else 0.dp, Color.White, CircleShape)
+                                .clickable { currentColor = color; isPencilMode = true }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Divider(color = Color.DarkGray, thickness = 0.5.dp)
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Line 2: Clear, Slider, Undo/Redo, Fold
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        IconButton(onClick = { if (confirmRequired) showDeleteDialog = true else lines.clear() }) {
+                            Icon(Icons.Default.Delete, "Clear", tint = Color.Red)
+                        }
+                        Checkbox(checked = confirmRequired, onCheckedChange = { confirmRequired = it },
+                            colors = CheckboxDefaults.colors(uncheckedColor = Color.Gray))
+                        
+                        Slider(value = strokeWidth, onValueChange = { strokeWidth = it }, valueRange = 5f..100f, modifier = Modifier.width(80.dp))
+                        
+                        // Size Preview
+                        Box(modifier = Modifier.size((strokeWidth/5).coerceIn(4f, 15f).dp).background(if(isPencilMode) currentColor else Color.LightGray, CircleShape))
+
+                        IconButton(onClick = { if (lines.isNotEmpty()) undoneLines.add(lines.removeAt(lines.size - 1)) }) {
+                            Icon(Icons.Default.Undo, "Undo", tint = Color.White)
+                        }
+                        IconButton(onClick = { if (undoneLines.isNotEmpty()) lines.add(undoneLines.removeAt(undoneLines.size - 1)) }) {
+                            Icon(Icons.Default.Redo, "Redo", tint = Color.White)
+                        }
+                        IconButton(onClick = { isExpanded = false }) {
+                            Icon(Icons.Default.ExpandLess, "Fold", tint = Color.Cyan)
+                        }
+                    }
+                } else {
+                    // Folded Mode: 3 Capsule Buttons
+                    Row(horizontalArrangement = Arrangement.spacedBy(15.dp)) {
+                        // Green Button: Toggles Pencil/Eraser
+                        Box(Modifier.size(45.dp, 20.dp).background(if(isPencilMode) Color.Green else Color.LightGray, CircleShape)
+                            .clickable { isPencilMode = !isPencilMode }) // یہاں ٹوگل لاجک ٹھیک کر دی
+                        
+                        // Red Button: Clear All
+                        Box(Modifier.size(45.dp, 20.dp).background(Color.Red, CircleShape)
+                            .clickable { if (confirmRequired) showDeleteDialog = true else lines.clear() })
+                        
+                        // Blue Button: Expand Panel
+                        Box(Modifier.size(45.dp, 20.dp).background(Color.Blue, CircleShape)
+                            .clickable { isExpanded = true })
+                    }
+                }
+            }
         }
 
-        // Delete Confirmation Dialog
         if (showDeleteDialog) {
             AlertDialog(
                 onDismissRequest = { showDeleteDialog = false },
                 title = { Text("تصدیق") },
-                text = { Text("کیا آپ پورا بورڈ صاف کرنا چاہتے ہیں؟") },
-                confirmButton = {
-                    TextButton(onClick = { lines.clear(); showDeleteDialog = false }) { Text("جی ہاں", color = Color.Red) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDeleteDialog = false }) { Text("کینسل") }
-                }
+                text = { Text("کیا آپ سارا بورڈ صاف کرنا چاہتے ہیں؟") },
+                confirmButton = { TextButton(onClick = { lines.clear(); showDeleteDialog = false }) { Text("ہاں", color = Color.Red) } },
+                dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("نہیں") } }
             )
-        }
-    }
-}
-
-@Composable
-fun ControlPanelContent(
-    isExpanded: Boolean,
-    isPencilMode: Boolean,
-    currentColor: Color,
-    strokeWidth: Float,
-    confirmRequired: Boolean,
-    onModeChange: (Boolean) -> Unit,
-    onColorChange: (Color) -> Unit,
-    onWidthChange: (Float) -> Unit,
-    onUndo: () -> Unit,
-    onRedo: () -> Unit,
-    onClear: () -> Unit,
-    onFoldToggle: () -> Unit,
-    onConfirmToggle: (Boolean) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .widthIn(min = 100.dp)
-            .background(Color(0xFF252525), RoundedCornerShape(24.dp))
-            .border(1.dp, Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
-            .padding(12.dp)
-            .animateContentSize(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        if (isExpanded) {
-            // Line 1: Pencil, Eraser, Colors
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ModeButton(Icons.Default.Edit, "Pencil", isPencilMode, Color.Green) { onModeChange(true) }
-                ModeButton(Icons.Default.AutoFixNormal, "Eraser", !isPencilMode, Color.White) { onModeChange(false) }
-                
-                Spacer(modifier = Modifier.width(4.dp))
-                
-                val colors = listOf(Color.Black, Color.Red, Color.Blue, Color.Green, Color.Yellow)
-                colors.forEach { color ->
-                    Box(modifier = Modifier
-                        .size(26.dp)
-                        .background(color, CircleShape)
-                        .border(if (currentColor == color) 2.dp else 0.dp, Color.White, CircleShape)
-                        .clickable { onColorChange(color) }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            Divider(color = Color.DarkGray)
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Line 2: Clear, Size, Undo/Redo, Fold
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                IconButton(onClick = onClear) { Icon(Icons.Default.Delete, "Clear", tint = Color.Red) }
-                
-                Checkbox(checked = confirmRequired, onCheckedChange = onConfirmToggle, 
-                    colors = CheckboxDefaults.colors(uncheckedColor = Color.Gray))
-                
-                Slider(value = strokeWidth, onValueChange = onWidthChange, valueRange = 4f..100f, modifier = Modifier.width(70.dp))
-                
-                // Preview Circle
-                Box(modifier = Modifier.size((strokeWidth/4).coerceIn(4f, 20f).dp).background(if(isPencilMode) currentColor else Color.LightGray, CircleShape))
-
-                IconButton(onClick = onUndo) { Icon(Icons.Default.Undo, "Undo", tint = Color.White) }
-                IconButton(onClick = onRedo) { Icon(Icons.Default.Redo, "Redo", tint = Color.White) }
-                
-                IconButton(onClick = onFoldToggle) { Icon(Icons.Default.ExpandLess, "Fold", tint = Color.Cyan) }
-            }
-        } else {
-            // Folded Mode: 3 Capsule Buttons
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(Modifier.size(45.dp, 18.dp).background(if(isPencilMode) Color.Green else Color.Gray, CircleShape).clickable { onModeChange(true) })
-                Box(Modifier.size(45.dp, 18.dp).background(Color.Red, CircleShape).clickable { onClear() })
-                Box(Modifier.size(45.dp, 18.dp).background(Color.Blue, CircleShape).clickable { onFoldToggle() })
-            }
-        }
-    }
-}
-
-@Composable
-fun ModeButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, selected: Boolean, activeColor: Color, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = if (selected) activeColor else Color.Transparent,
-        contentColor = if (selected) Color.Black else Color.White,
-        modifier = Modifier.height(36.dp)
-    ) {
-        Row(Modifier.padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = label, modifier = Modifier.size(20.dp))
         }
     }
 }
